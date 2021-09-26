@@ -1,3 +1,4 @@
-# personal-starting-point
+# Taśma
 
-Subjective selection of materials and designs useful when starting a project.
+Loosely based on serenity example, chatops discord bot.
+
