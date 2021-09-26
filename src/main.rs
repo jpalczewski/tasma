@@ -10,9 +10,9 @@
 //! ```
 mod commands;
 
-use std::{collections::HashSet, env, sync::Arc};
+use std::{collections::HashSet, env, sync::Arc, collections::HashMap};
 
-use commands::{ meta::*, owner::*};
+use commands::{ meta::*, owner::*, weblate::*};
 use serenity::{
     async_trait,
     client::bridge::gateway::ShardManager,
@@ -23,6 +23,7 @@ use serenity::{
 };
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tokio::sync::RwLock;
 
 pub struct ShardManagerContainer;
 
@@ -44,8 +45,23 @@ impl EventHandler for Handler {
 }
 
 #[group]
+#[prefixes("weblate","w")]
+#[commands(status, update)]
+#[summary = "Commands to interact with weblate"]
+struct Weblate;
+
+#[group]
 #[commands(ping, quit)]
+#[sub_groups(weblate)]
 struct General;
+
+
+struct ReqwestClient;
+
+impl TypeMapKey for ReqwestClient {
+    type Value = Arc<RwLock<HashMap<String, String>>>;
+
+}
 
 #[tokio::main]
 async fn main() {
@@ -87,9 +103,11 @@ async fn main() {
         .await
         .expect("Err creating client");
 
+    
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
+      //  data.insert::<WeblateSettings>
     }
 
     let shard_manager = client.shard_manager.clone();
