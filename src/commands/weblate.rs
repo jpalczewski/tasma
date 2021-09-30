@@ -1,34 +1,96 @@
-use serenity::framework::standard::{macros::{command, help}, 
-    CommandResult, help_commands};
+use serenity::framework::standard::{macros::{command}, 
+    CommandResult};
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use std::env;
-use reqwest::{Client, header};
+use reqwest::{header};
+use serde::{Deserialize};
+use std::collections::HashMap;
+
+#[derive(Deserialize)]
+struct RepositoryStatus {
+    needs_commit : bool,
+    needs_merge : bool,
+    needs_push : bool,
+
+}
+
+#[derive(Deserialize)]
+struct OperationResult {
+    result: bool,
+}
 
 #[command]
 #[aliases("s")]
 #[description = "Checks weblate health, shows number of pending changes"]
 async fn status(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = "status";
-    let url = format!("{}/api/projects/{}/repository/", env::var("WEBLATE_HOST").expect("missing weblate url"), 
-        env::var("WEBLATE_PROJECT").expect("missing project name from env") );
+    fn beuatify_boolean(value :bool) -> &'static str {
+        return match value {
+            false =>  "Nope ✅",
+            true => "Yeah 👀"
+        }
+        
+    }
+    
+    let url = get_weblate_url();
 
     let client = get_weblate_client();
 
-    let res = client.get(url).send().await?.text().await?;
-    let text = format!("{:#?}", res);
-    msg.channel_id.say(&ctx.http, &text).await?;
+    let res = client.get(url).send().await?.json::<RepositoryStatus>().await?;
+
+    msg.channel_id.send_message(&ctx.http, |m| {
+        m.embed(|e| {
+            e.title("Weblate status");
+            e.description("Below are statuses of ");
+            e.fields(vec![
+                ("Commits pending", beuatify_boolean(res.needs_commit), true),
+                ("Needs merge", beuatify_boolean(res.needs_merge), true),
+                ("Push pending", beuatify_boolean(res.needs_push), true),
+            ]);
+
+            e
+        });
+
+        m
+    }).await?;
 
     Ok(())
+    
 }
 
 
+
+
 #[command]
+#[aliases("u")]
 async fn update(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = "update";
+    fn get_params(operation: &str) -> HashMap<&str, &str> {
+        let mut map = HashMap::new();
+        map.insert("operation", operation);
+        map
+    }
+    fn format_result(operation: &str, result: bool) -> String {
+        format!("Operation {} results: {}", operation, result)
+    }
 
-    msg.channel_id.say(&ctx.http, data).await?;
+    async fn run_command(operation: &str,client: &reqwest::Client, m: &Message, ctx: &Context) -> CommandResult {
+        let res = client.post(get_weblate_url())
+        .json(&get_params(operation))
+        .send()
+        .await?
+        .json::<OperationResult>()
+        .await?;
+    
+    m
+        .channel_id
+        .say(&ctx.http,format_result(operation, res.result))
+        .await?;
+        Ok(())
+    }
+    let client = get_weblate_client();
 
+    run_command("commit", &client, msg, ctx).await?; 
+    run_command("push", &client, msg, ctx).await?;    
 
     Ok(())
 }
@@ -42,6 +104,13 @@ fn get_weblate_client() -> reqwest::Client {
     headers.insert("Authorization", token);
     let client = reqwest::Client::builder()
     .default_headers(headers)
+//    .proxy(reqwest::Proxy::http("http://127.0.0.1:8888").unwrap())
     .build();
     client.expect("creating client failed")
+}
+
+fn get_weblate_url() -> String {
+    format!("{}/api/projects/{}/repository/", 
+    env::var("WEBLATE_HOST").expect("missing weblate url"), 
+    env::var("WEBLATE_PROJECT").expect("missing project name from env") )
 }
