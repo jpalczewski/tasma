@@ -12,7 +12,7 @@ mod commands;
 
 use std::{collections::HashSet, env, sync::Arc, collections::HashMap};
 
-use commands::{ meta::*, owner::*, weblate::*};
+use commands::{ meta::*, owner::*, weblate::*, jenkins::*};
 use serenity::{
     async_trait,
     client::bridge::gateway::ShardManager,
@@ -51,8 +51,15 @@ impl EventHandler for Handler {
 struct Weblate;
 
 #[group]
+#[prefixes("jenkins","j")]
+#[commands(build)]
+#[summary = "Commands to interact with Jenkins"]
+struct Jenkins;
+
+#[group]
 #[commands(ping, quit)]
 #[sub_groups(weblate)]
+#[sub_groups(jenkins)]
 struct General;
 
 
